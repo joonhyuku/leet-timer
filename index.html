@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<!-- 모바일 화면에 꽉 차게, 홈 화면에 추가하면 앱처럼 보이게 하는 설정들 -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#10141C" />
+<title>LEET 페이스 타이머</title>
+<style>
+  /* ---------- 색·폰트 토큰 (여기만 바꾸면 전체 분위기가 바뀜) ---------- */
+  :root {
+    --bg:        #10141C;   /* 잉크 네이비 배경 */
+    --surface:   #181E29;   /* 카드 면 */
+    --line:      rgba(236,231,221,0.08);
+    --ink:       #ECE7DD;   /* 따뜻한 종이색 글자 */
+    --muted:     #8A93A6;   /* 흐린 글자 */
+    --ok:        #4FB286;   /* 페이스 맞음 / 앞섬 = 청록 */
+    --warn:      #E0A458;   /* 약간 뒤처짐 = 호박색 */
+    --bad:       #D9694E;   /* 많이 뒤처짐 = 점토 붉은색 */
+    --mark:      #8E9FE3;   /* OMR 마킹 구간 = 차분한 파랑 */
+
+    --mono: "SF Mono", ui-monospace, "JetBrains Mono", "Menlo", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo",
+            "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    padding: env(safe-area-inset-top) env(safe-area-inset-right)
+             env(safe-area-inset-bottom) env(safe-area-inset-left);
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    justify-content: center;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 460px;
+    padding: 24px 22px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  /* ---------- 상단 제목 ---------- */
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 4px;
+  }
+  .title { font-size: 20px; font-weight: 600; margin: 0; }
+
+  /* ---------- 모드 탭 (모의고사 / 문제풀이) ---------- */
+  .tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 4px;
+    gap: 4px;
+  }
+  .tab-btn {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 11px 6px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: color .15s, background .15s;
+  }
+  .tab-btn[aria-pressed="true"] {
+    background: #2A3343;
+    color: var(--ink);
+  }
+
+  /* ---------- 영역 선택 ---------- */
+  .sections {
+    display: grid;
+    gap: 8px;
+  }
+  #sectionsMock { grid-template-columns: repeat(3, 1fr); }
+  #sectionsPractice { grid-template-columns: repeat(2, 1fr); }
+  .section-btn {
+    appearance: none;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 12px 6px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: color .15s, border-color .15s, background .15s;
+  }
+  .section-btn small {
+    display: block;
+    font-weight: 400;
+    font-size: 11px;
+    margin-top: 3px;
+    opacity: .8;
+  }
+  .section-btn[aria-pressed="true"] {
+    color: var(--ink);
+    border-color: var(--ink);
+    background: #1E2533;
+  }
+
+  /* ---------- 설정 줄 ---------- */
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 10px 14px;
+  }
+  .setting-row .setting-title { font-size: 13px; color: var(--muted); }
+  .setting-row .setting-title strong {
+    display: block;
+    color: var(--ink);
+    font-size: 15px;
+    margin-top: 2px;
+  }
+  .setting-ctrl { display: flex; align-items: center; gap: 10px; }
+  .setting-btn {
+    appearance: none;
+    width: 42px; height: 40px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink);
+    font-size: 20px;
+    border-radius: 10px;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .setting-btn:active { background: #1E2533; }
+  .setting-val {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 600;
+    min-width: 60px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 체크박스 줄 */
+  .sound-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 2px 4px;
+  }
+  .sound-row input[type="checkbox"] {
+    width: 20px; height: 20px;
+    accent-color: var(--mark);
+    cursor: pointer;
+  }
+  .sound-row label {
+    font-size: 13px;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+  }
+
+  /* ---------- 큰 카운트다운 ---------- */
+  .clock-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 26px 20px 22px;
+    text-align: center;
+    position: relative;
+    /* overflow: hidden 을 쓰지 않음 — 사파리에서 숫자가 잘리는 원인 */
+  }
+  .clock-card::before {
+    content: "";
+    position: absolute; top: 0; height: 3px;
+    left: 16px; right: 16px; /* 둥근 모서리를 피해 살짝 안쪽으로 */
+    background: var(--signal, var(--muted));
+    transition: background .3s;
+    border-radius: 0 0 3px 3px;
+  }
+  .clock {
+    font-family: var(--mono);
+    font-size: clamp(52px, 18vw, 76px);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.25; /* 줄 높이에 여유 — 숫자 아랫부분 잘림 방지 */
+    padding-bottom: 2px;
+    margin: 0 0 4px;
+  }
+  .clock-label { font-size: 13px; color: var(--muted); margin: 0; }
+
+  .bar {
+    height: 6px;
+    background: rgba(236,231,221,0.10);
+    border-radius: 99px;
+    margin-top: 18px;
+    overflow: hidden;
+    position: relative;
+  }
+  .bar-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--signal, var(--muted));
+    transition: width .25s linear, background .3s;
+  }
+  .bar-notch {
+    position: absolute;
+    top: -2px; bottom: -2px;
+    width: 2px;
+    background: var(--mark);
+    border-radius: 2px;
+  }
+
+  /* ---------- 페이스 블록 ---------- */
+  .pace { display: flex; flex-direction: column; gap: 14px; }
+  .pace-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pace-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 14px;
+    text-align: center;
+  }
+  .pace-card .k { font-size: 12px; color: var(--muted); margin: 0 0 6px; }
+  .pace-card .v {
+    font-family: var(--mono);
+    font-size: 30px;
+    font-weight: 600;
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .pace-card .v small {
+    font-size: 15px;
+    color: var(--muted);
+    font-weight: 400;
+  }
+
+  .status {
+    text-align: center;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--signal, var(--muted));
+    transition: color .3s;
+    min-height: 22px;
+  }
+
+  .stepper { display: flex; align-items: center; justify-content: center; gap: 14px; }
+  .step-btn {
+    appearance: none;
+    width: 56px; height: 48px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 24px;
+    border-radius: 12px;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .step-btn:active { background: #1E2533; }
+  .step-label { font-size: 13px; color: var(--muted); min-width: 110px; text-align: center; }
+
+  /* ---------- 시작 / 리셋 ---------- */
+  .controls { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
+  .btn {
+    appearance: none;
+    border: none;
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 16px;
+    border-radius: 14px;
+    cursor: pointer;
+  }
+  .btn-primary { background: var(--ink); color: var(--bg); }
+  .btn-ghost { background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+
+  .hint { font-size: 12px; color: var(--muted); text-align: center; margin: 0; line-height: 1.6; }
+
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  /* 모드/상황에 따라 숨길 요소 */
+  .hidden { display: none !important; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <p class="eyebrow">LEET 페이스 타이머</p>
+      <h1 class="title" id="modeTitle">모의고사 타이머</h1>
+    </header>
+
+    <!-- 모드 탭 -->
+    <div class="tabs" id="tabs">
+      <button class="tab-btn" data-mode="mock" aria-pressed="true">모의고사</button>
+      <button class="tab-btn" data-mode="practice" aria-pressed="false">문제풀이</button>
+    </div>
+
+    <!-- [모의고사] 영역 선택 -->
+    <div class="sections" id="sectionsMock">
+      <button class="section-btn" data-q="30" data-min="70"  data-mark="2" aria-pressed="true">
+        언어이해<small>30문항 · 70분</small>
+      </button>
+      <button class="section-btn" data-q="40" data-min="125" data-mark="2">
+        추리논증<small>40문항 · 125분</small>
+      </button>
+      <button class="section-btn" data-q="2" data-min="110" data-mark="0" data-essay="1">
+        논술<small>110분</small>
+      </button>
+    </div>
+
+    <!-- [문제풀이] 영역 선택: data-perq = 문항당 초 (시험시간 ÷ 문항수) -->
+    <div class="sections hidden" id="sectionsPractice">
+      <button class="section-btn" data-perq="140" data-def="3" aria-pressed="true">
+        언어이해<small>문항당 2분 20초</small>
+      </button>
+      <button class="section-btn" data-perq="187.5" data-def="4">
+        추리논증<small>문항당 약 3분 8초</small>
+      </button>
+    </div>
+
+    <!-- [문제풀이] 풀 문제 수 -->
+    <div class="setting-row hidden" id="practiceRow">
+      <div class="setting-title">
+        풀 문제 수
+        <strong id="practiceSummary">총 07:00 배정</strong>
+      </div>
+      <div class="setting-ctrl">
+        <button class="setting-btn" id="pMinus" aria-label="문제 수 줄이기">−</button>
+        <span class="setting-val" id="pVal">3문항</span>
+        <button class="setting-btn" id="pPlus" aria-label="문제 수 늘리기">+</button>
+      </div>
+    </div>
+
+    <!-- [모의고사] OMR 마킹 시간 (시험 중에도 조절 가능) -->
+    <div class="setting-row" id="markRow">
+      <div class="setting-title">
+        OMR 마킹 시간
+        <strong id="solveSummary">풀이 68분 + 마킹 2분</strong>
+      </div>
+      <div class="setting-ctrl">
+        <button class="setting-btn" id="markMinus" aria-label="마킹 시간 줄이기">−</button>
+        <span class="setting-val" id="markVal">2분</span>
+        <button class="setting-btn" id="markPlus" aria-label="마킹 시간 늘리기">+</button>
+      </div>
+    </div>
+
+    <!-- [모의고사] 버리는 문제 수 (시험 중에도 조절 가능) -->
+    <div class="setting-row" id="skipRow">
+      <div class="setting-title">
+        버리는 문제
+        <strong id="skipSummary">실제 풀 문항 30개</strong>
+      </div>
+      <div class="setting-ctrl">
+        <button class="setting-btn" id="skipMinus" aria-label="버리는 문제 줄이기">−</button>
+        <span class="setting-val" id="skipVal">0문항</span>
+        <button class="setting-btn" id="skipPlus" aria-label="버리는 문제 늘리기">+</button>
+      </div>
+    </div>
+
+    <!-- [모의고사] 마킹 알림음 (기본 꺼짐) -->
+    <div class="sound-row" id="soundRow">
+      <input type="checkbox" id="soundToggle" />
+      <label for="soundToggle">마킹 구간에 들어가면 알림음 울리기</label>
+    </div>
+
+    <!-- 화면 꺼짐 방지 (공통, 기본 꺼짐, 타이머가 도는 동안만 작동) -->
+    <div class="sound-row" id="wakeRow">
+      <input type="checkbox" id="wakeToggle" />
+      <label for="wakeToggle">타이머 작동 중 화면 꺼짐 방지</label>
+    </div>
+
+    <!-- 큰 시계 -->
+    <section class="clock-card">
+      <div class="clock" id="clock">70:00</div>
+      <p class="clock-label" id="clockLabel">남은 시간</p>
+      <div class="bar">
+        <div class="bar-fill" id="barFill"></div>
+        <div class="bar-notch" id="barNotch"></div>
+      </div>
+    </section>
+
+    <!-- 페이스 (논술에서는 숨김) -->
+    <section class="pace" id="paceBlock">
+      <div class="pace-cards">
+        <div class="pace-card">
+          <p class="k">목표 (푼 문항)</p>
+          <p class="v"><span id="targetQ">0</span><small id="targetMax"> / 30</small></p>
+        </div>
+        <div class="pace-card">
+          <p class="k">내가 푼 문항</p>
+          <p class="v"><span id="currentQ">0</span><small id="currentMax"> / 30</small></p>
+        </div>
+      </div>
+
+      <p class="status" id="status">시작 전</p>
+
+      <div class="stepper">
+        <button class="step-btn" id="minus" aria-label="푼 문항 줄이기">−</button>
+        <span class="step-label" id="stepLabel">문제 하나 풀 때마다 +<br>(버린 문제는 세지 않기)</span>
+        <button class="step-btn" id="plus" aria-label="푼 문항 늘리기">+</button>
+      </div>
+    </section>
+
+    <!-- 시작 / 리셋 -->
+    <div class="controls">
+      <button class="btn btn-primary" id="toggle">시작</button>
+      <button class="btn btn-ghost" id="reset">리셋</button>
+    </div>
+
+    <p class="hint" id="hint">페이스는 마킹 시간을 뺀 '풀이 시간'과<br>버리는 문제를 뺀 '실제 풀 문항 수' 기준으로 계산해요.</p>
+  </main>
+
+<script>
+/* =========================================================
+   상태(state) — 앱이 기억하는 값들. 새로고침하면 초기화돼요.
+   ========================================================= */
+let mode = "mock";         // "mock"(모의고사) | "practice"(문제풀이)
+
+/* --- 모의고사 설정 --- */
+let mockMin    = 70;       // 영역 전체 시간(분)
+let mockQ      = 30;       // 영역 전체 문항 수
+let markingSec = 2 * 60;   // OMR 마킹 시간(초)
+let skipCount  = 0;        // 버리는 문항 수
+let isEssay    = false;    // 논술 모드 (타이머만)
+
+/* --- 문제풀이 설정 --- */
+let perSec = 140;          // 문항당 배정 시간(초) = 시험시간 ÷ 문항수
+let pCount = 3;            // 풀 문제 수 (영역별 기본값: 언어이해 3, 추리논증 4)
+
+/* --- 공통 진행 상태 --- */
+let currentQ   = 0;        // 지금까지 '푼' 문항 수
+let running    = false;
+let startStamp = 0;
+let elapsedSec = 0;
+let tick       = null;
+let wasMarking = false;
+
+const $ = (id) => document.getElementById(id);
+const clockEl    = $("clock");
+const labelEl    = $("clockLabel");
+const barEl      = $("barFill");
+const notchEl    = $("barNotch");
+const targetEl   = $("targetQ");
+const targetMax  = $("targetMax");
+const currentEl  = $("currentQ");
+const currentMax = $("currentMax");
+const statusEl   = $("status");
+const toggleBtn  = $("toggle");
+
+/* =========================================================
+   파생 값 — "지금 모드 기준으로" 전체 시간/풀이 시간/문항 수를 계산.
+   모드별 차이를 이 세 함수에 몰아넣어서 render()는 모드를 거의 몰라도 됨.
+   ========================================================= */
+function totalSec() {
+  return mode === "mock" ? mockMin * 60 : pCount * perSec;
+}
+function solveSec() {
+  if (mode === "practice") return totalSec(); // 문제풀이엔 마킹이 없음
+  return Math.max(60, totalSec() - markingSec);
+}
+function effectiveQ() {
+  return mode === "mock" ? Math.max(1, mockQ - skipCount) : pCount;
+}
+/* 마킹 구간이 존재하는 모드인가 */
+function hasMarking() {
+  return mode === "mock" && !isEssay && markingSec > 0;
+}
+
+/* 초 → "MM:SS" 또는 "H:MM:SS" */
+function fmt(sec) {
+  sec = Math.max(0, Math.round(sec));
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(s).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+/* ---------- 알림음: 파일 없이 브라우저가 직접 소리를 만들어냄 ---------- */
+let audioCtx = null;
+function beep() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.35].forEach((delay) => {
+      const osc  = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.001, audioCtx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.4,  audioCtx.currentTime + delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + 0.3);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(audioCtx.currentTime + delay);
+      osc.stop(audioCtx.currentTime + delay + 0.32);
+    });
+  } catch (e) { /* 소리가 안 나는 환경이어도 앱이 멈추진 않게 */ }
+}
+
+/* ---------- 화면 꺼짐 방지 (Wake Lock) ---------- */
+let wakeLock = null;
+async function syncWakeLock() {
+  const want = $("wakeToggle").checked && running;
+  if (want && !wakeLock) {
+    if (!("wakeLock" in navigator)) {
+      $("wakeToggle").checked = false;
+      alert("이 브라우저에서는 화면 꺼짐 방지를 지원하지 않아요.");
+      return;
+    }
+    try {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { wakeLock = null; });
+    } catch (e) { wakeLock = null; }
+  } else if (!want && wakeLock) {
+    try { await wakeLock.release(); } catch (e) {}
+    wakeLock = null;
+  }
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") syncWakeLock();
+});
+
+/* =========================================================
+   모드 전환 — 보이는 줄들을 모드에 맞게 갈아끼우고 리셋
+   ========================================================= */
+function setMode(next) {
+  mode = next;
+  const mock = mode === "mock";
+
+  $("modeTitle").textContent = mock ? "모의고사 타이머" : "문제풀이 타이머";
+  document.querySelectorAll(".tab-btn").forEach(b =>
+    b.setAttribute("aria-pressed", b.dataset.mode === mode ? "true" : "false"));
+
+  $("sectionsMock").classList.toggle("hidden", !mock);
+  $("sectionsPractice").classList.toggle("hidden", mock);
+  $("practiceRow").classList.toggle("hidden", mock);
+  $("markRow").classList.toggle("hidden", !mock || isEssay);
+  $("skipRow").classList.toggle("hidden", !mock || isEssay);
+  $("soundRow").classList.toggle("hidden", !mock || isEssay);
+  $("paceBlock").classList.toggle("hidden", mock && isEssay);
+
+  $("stepLabel").innerHTML = mock
+    ? "문제 하나 풀 때마다 +<br>(버린 문제는 세지 않기)"
+    : "문제 하나 풀 때마다 +";
+  $("hint").textContent = mock
+    ? "페이스는 마킹 시간을 뺀 '풀이 시간'과 버리는 문제를 뺀 '실제 풀 문항 수' 기준으로 계산해요. 설정은 시험 중에도 바꿀 수 있어요."
+    : "선택한 영역의 문항당 평균 시간 × 문제 수만큼 시간을 배정해요.";
+
+  hardReset();
+}
+
+/* ---------- [모의고사] 영역 선택 ---------- */
+function selectMockSection(btn) {
+  document.querySelectorAll("#sectionsMock .section-btn").forEach(b =>
+    b.setAttribute("aria-pressed", b === btn ? "true" : "false"));
+  mockQ      = Number(btn.dataset.q);
+  mockMin    = Number(btn.dataset.min);
+  markingSec = Number(btn.dataset.mark) * 60;
+  skipCount  = 0;
+  isEssay    = btn.dataset.essay === "1";
+
+  /* 논술이면 마킹·버리기·알림음·페이스 숨김 */
+  $("markRow").classList.toggle("hidden", isEssay);
+  $("skipRow").classList.toggle("hidden", isEssay);
+  $("soundRow").classList.toggle("hidden", isEssay);
+  $("paceBlock").classList.toggle("hidden", isEssay);
+  $("hint").textContent = isEssay
+    ? "논술은 110분 타이머만 제공해요."
+    : "페이스는 마킹 시간을 뺀 '풀이 시간'과 버리는 문제를 뺀 '실제 풀 문항 수' 기준으로 계산해요. 설정은 시험 중에도 바꿀 수 있어요.";
+
+  hardReset();
+}
+
+/* ---------- [문제풀이] 영역 선택 ---------- */
+function selectPracticeSection(btn) {
+  document.querySelectorAll("#sectionsPractice .section-btn").forEach(b =>
+    b.setAttribute("aria-pressed", b === btn ? "true" : "false"));
+  perSec = Number(btn.dataset.perq);
+  pCount = Number(btn.dataset.def); // 영역별 기본 문제 수로 되돌림
+  hardReset();
+}
+
+/* ---------- 설정 조절 ---------- */
+function changeMarking(deltaMin) {
+  const next = markingSec + deltaMin * 60;
+  markingSec = Math.min(Math.floor(totalSec() / 2), Math.max(0, next));
+  render();
+}
+function changeSkip(delta) {
+  const next = skipCount + delta;
+  skipCount = Math.min(Math.floor(mockQ / 2), Math.max(0, next));
+  if (currentQ > effectiveQ()) currentQ = effectiveQ();
+  render();
+}
+function changePCount(delta) {
+  pCount = Math.min(40, Math.max(1, pCount + delta));
+  if (currentQ > pCount) currentQ = pCount;
+  render();
+}
+
+/* =========================================================
+   render() — 화면 전체를 현재 상태에 맞게 다시 그림
+   ========================================================= */
+function render() {
+  const total = totalSec();
+  const remaining = total - elapsedSec;
+  clockEl.textContent = fmt(remaining);
+
+  const progress = total === 0 ? 0 : elapsedSec / total;
+  barEl.style.width = Math.min(100, progress * 100) + "%";
+
+  /* ----- 논술 모드: 타이머만 ----- */
+  if (mode === "mock" && isEssay) {
+    notchEl.style.display = "none";
+    let signal = (running || elapsedSec > 0) ? "var(--ok)" : "var(--muted)";
+    document.documentElement.style.setProperty("--signal", signal);
+    labelEl.textContent = remaining <= 0 ? "시간 종료" : "남은 시간";
+    if (remaining <= 0 && running) pause();
+    return;
+  }
+
+  /* ----- 설정 줄 표시 갱신 ----- */
+  if (mode === "mock") {
+    $("markVal").textContent = Math.round(markingSec / 60) + "분";
+    $("solveSummary").textContent =
+      "풀이 " + Math.round(solveSec() / 60) + "분 + 마킹 " + Math.round(markingSec / 60) + "분";
+    $("skipVal").textContent = skipCount + "문항";
+    $("skipSummary").textContent = "실제 풀 문항 " + effectiveQ() + "개";
+  } else {
+    $("pVal").textContent = pCount + "문항";
+    $("practiceSummary").textContent = "총 " + fmt(total) + " 배정";
+  }
+
+  /* 마킹 눈금 (모의고사에서만) */
+  if (hasMarking()) {
+    notchEl.style.left = "calc(" + (solveSec() / total) * 100 + "% - 1px)";
+    notchEl.style.display = "block";
+  } else {
+    notchEl.style.display = "none";
+  }
+
+  /* 지금이 마킹 구간인가? */
+  const inMarking = hasMarking() && elapsedSec >= solveSec();
+
+  /* 마킹 구간에 '새로' 들어선 순간, 알림음이 켜져 있으면 울림 */
+  if (inMarking && !wasMarking && running && $("soundToggle").checked) beep();
+  wasMarking = inMarking;
+
+  /* 목표: '풀이 시간' 동안 '풀 문항 수'를 끝내는 페이스 */
+  const solveProgress = Math.min(1, elapsedSec / solveSec());
+  const target = inMarking
+    ? effectiveQ()
+    : Math.min(effectiveQ(), Math.floor(solveProgress * effectiveQ()));
+  targetEl.textContent = target;
+  currentEl.textContent = currentQ;
+  targetMax.textContent  = " / " + effectiveQ();
+  currentMax.textContent = " / " + effectiveQ();
+
+  /* 페이스 판정 → 색(signal)과 문구 */
+  let signal, msg;
+  if (!running && elapsedSec === 0) {
+    msg = "시작 전";
+    signal = "var(--muted)";
+    labelEl.textContent = "남은 시간";
+  } else if (inMarking) {
+    msg = "OMR 마킹 구간 · " + fmt(total - elapsedSec) + " 남음";
+    signal = "var(--mark)";
+    labelEl.textContent = "남은 시간 · 마킹";
+  } else {
+    labelEl.textContent = "남은 시간";
+    const diff = currentQ - target;
+    if (diff > 0)        { msg = diff + "문항 앞서는 중";      signal = "var(--ok)"; }
+    else if (diff === 0) { msg = "딱 맞는 페이스";             signal = "var(--ok)"; }
+    else if (diff >= -2) { msg = (-diff) + "문항 뒤처지는 중"; signal = "var(--warn)"; }
+    else                 { msg = (-diff) + "문항 뒤처지는 중"; signal = "var(--bad)"; }
+  }
+  statusEl.textContent = msg;
+  document.documentElement.style.setProperty("--signal", signal);
+
+  /* 시간이 다 되면 자동으로 멈춤 */
+  if (remaining <= 0 && running) {
+    pause();
+    labelEl.textContent = "시간 종료";
+  }
+}
+
+/* 매초 흐른 시간을 '실제 시계'로 계산 (탭을 가려도 정확) */
+function loop() {
+  elapsedSec = (Date.now() - startStamp) / 1000;
+  if (elapsedSec >= totalSec()) elapsedSec = totalSec();
+  render();
+}
+
+function start() {
+  if (running) return;
+  running = true;
+  toggleBtn.textContent = "일시정지";
+  startStamp = Date.now() - elapsedSec * 1000;
+  tick = setInterval(loop, 250);
+  syncWakeLock();
+  render();
+}
+
+function pause() {
+  running = false;
+  toggleBtn.textContent = "이어서";
+  clearInterval(tick);
+  syncWakeLock();
+  render();
+}
+
+function hardReset() {
+  pause();
+  elapsedSec = 0;
+  currentQ = 0;
+  wasMarking = false;
+  toggleBtn.textContent = "시작";
+  labelEl.textContent = "남은 시간";
+  render();
+}
+
+/* ---------- 이벤트 연결 ---------- */
+$("tabs").addEventListener("click", (e) => {
+  const btn = e.target.closest(".tab-btn");
+  if (btn && btn.dataset.mode !== mode) setMode(btn.dataset.mode);
+});
+
+$("sectionsMock").addEventListener("click", (e) => {
+  const btn = e.target.closest(".section-btn");
+  if (btn) selectMockSection(btn);
+});
+$("sectionsPractice").addEventListener("click", (e) => {
+  const btn = e.target.closest(".section-btn");
+  if (btn) selectPracticeSection(btn);
+});
+
+$("toggle").addEventListener("click", () => running ? pause() : start());
+$("reset").addEventListener("click", hardReset);
+
+$("plus").addEventListener("click", () => {
+  if (currentQ < effectiveQ()) currentQ++;
+  render();
+});
+$("minus").addEventListener("click", () => {
+  if (currentQ > 0) currentQ--;
+  render();
+});
+
+$("markPlus").addEventListener("click", () => changeMarking(+1));
+$("markMinus").addEventListener("click", () => changeMarking(-1));
+$("skipPlus").addEventListener("click", () => changeSkip(+1));
+$("skipMinus").addEventListener("click", () => changeSkip(-1));
+$("pPlus").addEventListener("click", () => changePCount(+1));
+$("pMinus").addEventListener("click", () => changePCount(-1));
+
+$("wakeToggle").addEventListener("change", syncWakeLock);
+
+/* 첫 화면 그리기 */
+render();
+</script>
+</body>
+</html>
